@@ -3,7 +3,9 @@
 Realtime WiFi topology visualizer:
 - Python backend scans nearby WiFi and streams node/edge data over WebSocket.
 - Three.js frontend renders AP nodes, links, and live signal board.
-
+<p align="center">
+  <img src="assets/image.png" width="900" />
+</p>
 ## Quick Start
 
 ### Option 1 (recommended): one command
