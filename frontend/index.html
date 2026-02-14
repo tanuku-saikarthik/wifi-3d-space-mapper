@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>WiFi Space Mapper</title>
+
+<style>
+:root {
+  --bg-1: #05080f;
+  --bg-2: #081320;
+  --panel: rgba(8, 18, 30, 0.64);
+  --panel-border: rgba(0, 255, 204, 0.45);
+  --text-main: #d8fff6;
+  --text-dim: #8ec1b5;
+  --accent: #00ffcc;
+  --accent-2: #4ef09a;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 10% 15%, rgba(0, 255, 204, 0.16), transparent 42%),
+    radial-gradient(circle at 88% 80%, rgba(78, 240, 154, 0.13), transparent 48%),
+    linear-gradient(160deg, var(--bg-1), var(--bg-2) 60%, #041522);
+  overflow: hidden;
+  color: var(--text-main);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px
+  );
+  background-size: 100% 3px;
+  opacity: 0.08;
+}
+
+#tooltip {
+  position: fixed;
+  z-index: 20;
+  color: var(--text-main);
+  background: rgba(2, 13, 22, 0.9);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+  display: none;
+  box-shadow: 0 12px 30px rgba(0, 255, 204, 0.15);
+}
+
+#hud {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 15;
+  color: var(--accent-2);
+  font-size: 13px;
+  background: var(--panel);
+  padding: 14px 14px 10px;
+  border: 1px solid rgba(78, 240, 154, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 0 24px rgba(78, 240, 154, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+#hud pre {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+#brand {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 15;
+  min-width: 260px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  box-shadow: 0 0 24px rgba(0, 255, 204, 0.14);
+  backdrop-filter: blur(8px);
+}
+
+#brand h1 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+#brand p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+#chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  border: 1px solid rgba(0, 255, 204, 0.25);
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 11px;
+  color: var(--text-main);
+  background: rgba(0, 22, 28, 0.45);
+}
+
+#statusDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: #ffc34d;
+  box-shadow: 0 0 10px #ffc34d;
+}
+
+#footerTag {
+  position: fixed;
+  left: 18px;
+  bottom: 16px;
+  z-index: 15;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(216, 255, 246, 0.6);
+}
+
+#wifiList {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  width: 320px;
+  max-height: 46vh;
+  overflow: auto;
+  z-index: 15;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  box-shadow: 0 0 24px rgba(0, 255, 204, 0.14);
+  backdrop-filter: blur(8px);
+  padding: 10px 12px;
+}
+
+#wifiList::-webkit-scrollbar {
+  width: 10px;
+}
+
+#wifiList::-webkit-scrollbar-track {
+  background: rgba(0, 20, 28, 0.55);
+  border-radius: 999px;
+}
+
+#wifiList::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(0, 255, 204, 0.85), rgba(78, 240, 154, 0.8));
+  border-radius: 999px;
+  border: 2px solid rgba(0, 20, 28, 0.55);
+}
+
+#wifiList {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 255, 204, 0.85) rgba(0, 20, 28, 0.55);
+}
+
+#wifiListTitle {
+  font-size: 12px;
+  letter-spacing: 0.09em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.wifiRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  font-size: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid rgba(142, 193, 181, 0.16);
+}
+
+.wifiRow:last-child {
+  border-bottom: none;
+}
+
+.wifiName {
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wifiSignal {
+  color: var(--accent-2);
+}
+
+@media (max-width: 840px) {
+  #brand {
+    min-width: 210px;
+  }
+  #hud {
+    max-width: calc(100vw - 36px);
+  }
+  #wifiList {
+    width: calc(100vw - 36px);
+    right: 18px;
+    left: 18px;
+    max-height: 28vh;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div id="hud">
+<pre id="hudText">
+[ WIFI_SPACE_MAPPER ]
+
+Connecting...
+</pre>
+</div>
+<div id="brand">
+  <h1>WIFI SPACE MAPPER</h1>
+  <p>Realtime RF topology in 3D space</p>
+  <div id="chips">
+    <span class="chip"><span id="statusDot"></span><span id="connState">CONNECTING</span></span>
+    <span class="chip">APs: <span id="apCount">0</span></span>
+    <span class="chip">Links: <span id="linkCount">0</span></span>
+  </div>
+</div>
+<div id="tooltip"></div>
+<div id="footerTag">#WiFiMapping #3DDataViz #SignalIntelligence</div>
+<div id="wifiList">
+  <div id="wifiListTitle">LIVE WIFI SIGNAL BOARD</div>
+  <div id="wifiRows"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.153/build/three.min.js"></script>
+<script>
+// ---------------- SCENE ----------------
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000000, 0.008);
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById("tooltip");
+const connState = document.getElementById("connState");
+const apCount = document.getElementById("apCount");
+const linkCount = document.getElementById("linkCount");
+const statusDot = document.getElementById("statusDot");
+const wifiRows = document.getElementById("wifiRows");
+const VELOCITY_DAMPING = 0.85;
+const EMBEDDING_ALPHA = 0.03;
+const OVERLAP_PADDING = 0.3;
+const OVERLAP_PUSH_STRENGTH = 0.7;
+const _overlapDir = new THREE.Vector3();
+const _zeroJitter = new THREE.Vector3(0.73, 0.41, 0.29);
+
+window.addEventListener("mousemove", e => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 300);
+camera.position.set(0, 0, 45);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// ---------------- LIGHTS ----------------
+scene.add(new THREE.AmbientLight(0x202020));
+const light = new THREE.PointLight(0x00ffcc, 2, 300);
+light.position.set(30,30,30);
+scene.add(light);
+
+// ---------------- DATA STRUCTURES ----------------
+const nodes = {};
+const edgesGroup = new THREE.Group();
+const edgeMemory = {};
+scene.add(edgesGroup);
+
+// ---------------- GEOMETRY ----------------
+const nodeGeom = new THREE.SphereGeometry(0.8, 16, 16);
+const shellGeom = new THREE.SphereGeometry(1, 24, 24);
+
+// ---------------- HELPERS ----------------
+function colorForBand(b) {
+  return b < 3000 ? 0x00ff00 : 0x00ffff;
+}
+
+function resolveNodeOverlaps() {
+  const ids = Object.keys(nodes);
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const a = nodes[ids[i]];
+      const b = nodes[ids[j]];
+
+      const ra = Math.max(0.45, a.mesh.scale.x * 0.8);
+      const rb = Math.max(0.45, b.mesh.scale.x * 0.8);
+      const minDist = ra + rb + OVERLAP_PADDING;
+
+      _overlapDir.subVectors(b.mesh.position, a.mesh.position);
+      let distSq = _overlapDir.lengthSq();
+
+      if (distSq < 1e-6) {
+        _overlapDir.copy(_zeroJitter);
+        distSq = _overlapDir.lengthSq();
+      }
+
+      if (distSq >= minDist * minDist) continue;
+
+      const dist = Math.sqrt(distSq);
+      const push = (minDist - dist) * 0.5 * OVERLAP_PUSH_STRENGTH;
+      _overlapDir.multiplyScalar(1 / dist);
+
+      a.mesh.position.addScaledVector(_overlapDir, -push);
+      b.mesh.position.addScaledVector(_overlapDir, push);
+      a.shell.position.copy(a.mesh.position);
+      b.shell.position.copy(b.mesh.position);
+
+      // Damp collision oscillation without overriding main velocity smoothing.
+      a.velocity.addScaledVector(_overlapDir, -push * 0.05);
+      b.velocity.addScaledVector(_overlapDir, push * 0.05);
+    }
+  }
+}
+
+// ---------------- WEBSOCKET ----------------
+const ws = new WebSocket("ws://127.0.0.1:9001");
+
+ws.onopen = () => {
+  connState.textContent = "LIVE";
+  statusDot.style.background = "#4ef09a";
+  statusDot.style.boxShadow = "0 0 10px #4ef09a";
+  document.getElementById("hudText").textContent =
+`[ WIFI_SPACE_MAPPER ]
+
+Connected
+`;
+};
+
+ws.onmessage = e => {
+  const msg = JSON.parse(e.data);
+  const data = msg.nodes;
+  const edges = msg.edges;
+  apCount.textContent = data.length;
+  linkCount.textContent = edges.length;
+
+  const ranked = [...data]
+    .sort((a, b) => (b.signal || 0) - (a.signal || 0))
+    .slice(0, 16);
+  wifiRows.innerHTML = ranked.map((n, idx) => `
+    <div class="wifiRow">
+      <div class="wifiName">${idx + 1}. ${(n.ssid || "Hidden SSID")} (${n.id})</div>
+      <div class="wifiSignal">${Math.round(n.signal || 0)}%</div>
+    </div>
+  `).join("");
+
+  // ---- UPDATE HUD ----
+  document.getElementById("hudText").textContent =
+`[ WIFI_SPACE_MAPPER ]
+
+Tracking ${data.length} APs
+Strong Links ${edges.length}
+
+[ BANDS ]
+2.4 GHz  ■ Green
+5.0 GHz  ■ Cyan
+
+[ CORE ]  Signal Strength
+[ SPHERE ] Coverage Volume
+[ BLUR ]  Uncertainty
+[ ORIGIN ] Local Receiver
+
+[ CONTROLS ]
+Drag (mouse / touch)  ■ rotate
+Pinch / wheel         ■ zoom
+`;
+
+  // ---- CLEAR EDGES ----
+  while (edgesGroup.children.length) {
+    edgesGroup.remove(edgesGroup.children[0]);
+  }
+
+  // ---- UPDATE NODES ----
+  data.forEach(n => {
+    if (!nodes[n.id]) {
+      // core node
+      const mat = new THREE.MeshStandardMaterial({
+        color: colorForBand(n.band),
+        emissive: colorForBand(n.band),
+        emissiveIntensity: 2
+      });
+      const mesh = new THREE.Mesh(nodeGeom, mat);
+      mesh.userData = n;
+      mesh.renderOrder = 2;
+
+      scene.add(mesh);
+
+      // coverage shell
+      const shell = new THREE.Mesh(
+        shellGeom,
+        new THREE.MeshBasicMaterial({
+          color: 0x00ff88,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.15,
+          depthWrite: false
+        })
+      );
+      shell.renderOrder = 1;
+      scene.add(shell);
+
+      nodes[n.id] = {
+        mesh,
+        shell,
+        velocity: new THREE.Vector3()
+      };
+    }
+
+    const obj = nodes[n.id];
+    obj.mesh.userData = n;
+    const SCALE = 25; // <-- THIS IS CRITICAL
+const target = new THREE.Vector3(
+  n.pos[0] * SCALE,
+  n.pos[1] * SCALE,
+  n.pos[2] * SCALE
+);
+
+
+    const smoothTarget = obj.mesh.position.clone().lerp(target, EMBEDDING_ALPHA);
+    const delta = smoothTarget.sub(obj.mesh.position);
+    obj.velocity.add(delta.multiplyScalar(0.08));
+    obj.velocity.multiplyScalar(VELOCITY_DAMPING);
+    obj.mesh.position.add(obj.velocity);
+    obj.shell.position.copy(obj.mesh.position);
+
+    const scale = THREE.MathUtils.clamp(
+  1 / Math.sqrt(n.variance + 0.05),
+  0.6,
+  3.0
+);
+
+    obj.mesh.scale.setScalar(scale);
+
+    const radius = THREE.MathUtils.clamp(
+  Math.sqrt(n.variance + 0.1) * 6,
+  2.0,
+  20.0
+);
+    obj.shell.scale.setScalar(radius);
+
+  });
+
+  resolveNodeOverlaps();
+
+  // ---- DRAW EDGES ----
+  edges.forEach(e => {
+    const key = `${e[0]}-${e[1]}`;
+    edgeMemory[key] = (edgeMemory[key] || 0) + 1;
+  });
+
+  Object.keys(edgeMemory).forEach(k => {
+    if (edgeMemory[k] > 3) {
+      const [i, j] = k.split("-").map(Number);
+      const ids = Object.keys(nodes);
+      if (!ids[i] || !ids[j]) return;
+
+      const p1 = nodes[ids[i]].mesh.position;
+      const p2 = nodes[ids[j]].mesh.position;
+
+      const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x00ffcc,
+        transparent: true,
+        opacity: 0.25
+      });
+
+      edgesGroup.add(new THREE.Line(geom, mat));
+    }
+  });
+
+  Object.keys(edgeMemory).forEach(k => edgeMemory[k] *= 0.95);
+};
+
+ws.onclose = () => {
+  connState.textContent = "OFFLINE";
+  statusDot.style.background = "#ff6b6b";
+  statusDot.style.boxShadow = "0 0 10px #ff6b6b";
+  wifiRows.innerHTML = `<div class="wifiRow"><div class="wifiName">No live scan data</div><div class="wifiSignal">--</div></div>`;
+};
+
+ws.onerror = () => {
+  connState.textContent = "ERROR";
+  statusDot.style.background = "#ff6b6b";
+  statusDot.style.boxShadow = "0 0 10px #ff6b6b";
+  wifiRows.innerHTML = `<div class="wifiRow"><div class="wifiName">Scan stream error</div><div class="wifiSignal">--</div></div>`;
+};
+
+// ---------------- CONTROLS & ANIMATE ----------------
+// Camera uses spherical coordinates so the user can orbit with touch/mouse and pinch/wheel to zoom.
+const camTarget = new THREE.Vector3(0, 0, 0);
+
+const spherical = new THREE.Spherical();
+spherical.setFromVector3(camera.position.clone().sub(camTarget));
+const sphericalTarget = spherical.clone();
+
+const ROTATION_SPEED = 0.005;
+const ZOOM_SPEED = 0.008;
+const DAMPING = 0.12;
+let isPointerDown = false;
+let lastPointer = { x: 0, y: 0 };
+let lastTouchDist = null;
+
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function getTouchDistance(a, b) { const dx = a.clientX - b.clientX; const dy = a.clientY - b.clientY; return Math.sqrt(dx*dx + dy*dy); }
+
+// Pointer (mouse) drag to orbit
+renderer.domElement.addEventListener('pointerdown', ev => {
+  isPointerDown = true;
+  lastPointer.x = ev.clientX;
+  lastPointer.y = ev.clientY;
+  try { ev.target.setPointerCapture(ev.pointerId); } catch (e) {}
+});
+window.addEventListener('pointermove', ev => {
+  if (!isPointerDown || ev.pointerType === 'touch') return; // touch handled separately
+  const dx = ev.clientX - lastPointer.x;
+  const dy = ev.clientY - lastPointer.y;
+  sphericalTarget.theta -= dx * ROTATION_SPEED;
+  sphericalTarget.phi -= dy * ROTATION_SPEED;
+  sphericalTarget.phi = clamp(sphericalTarget.phi, 0.1, Math.PI - 0.1);
+  lastPointer.x = ev.clientX;
+  lastPointer.y = ev.clientY;
+});
+window.addEventListener('pointerup', ev => { isPointerDown = false; try { ev.target.releasePointerCapture(ev.pointerId); } catch (e) {} });
+
+// Touch: single-finger drag = rotate, two-finger pinch = zoom
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    lastTouchDist = getTouchDistance(e.touches[0], e.touches[1]);
+  } else if (e.touches.length === 1) {
+    lastPointer.x = e.touches[0].clientX;
+    lastPointer.y = e.touches[0].clientY;
+    isPointerDown = true;
+  }
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const d = getTouchDistance(e.touches[0], e.touches[1]);
+    const delta = lastTouchDist ? (d - lastTouchDist) : 0;
+    sphericalTarget.radius -= delta * ZOOM_SPEED;
+    sphericalTarget.radius = clamp(sphericalTarget.radius, 10, 200);
+    lastTouchDist = d;
+  } else if (e.touches.length === 1 && isPointerDown) {
+    e.preventDefault();
+    const dx = e.touches[0].clientX - lastPointer.x;
+    const dy = e.touches[0].clientY - lastPointer.y;
+    sphericalTarget.theta -= dx * ROTATION_SPEED;
+    sphericalTarget.phi -= dy * ROTATION_SPEED;
+    sphericalTarget.phi = clamp(sphericalTarget.phi, 0.1, Math.PI - 0.1);
+    lastPointer.x = e.touches[0].clientX;
+    lastPointer.y = e.touches[0].clientY;
+  }
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchend', e => {
+  if (e.touches.length < 2) lastTouchDist = null;
+  if (e.touches.length === 0) isPointerDown = false;
+});
+
+// Wheel zoom
+renderer.domElement.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  sphericalTarget.radius += ev.deltaY * ZOOM_SPEED;
+  sphericalTarget.radius = clamp(sphericalTarget.radius, 10, 200);
+}, { passive: false });
+
+// Resize handler
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// Animate with damping towards target spherical coordinates
+function animate() {
+  requestAnimationFrame(animate);
+
+  spherical.theta += (sphericalTarget.theta - spherical.theta) * DAMPING;
+  spherical.phi += (sphericalTarget.phi - spherical.phi) * DAMPING;
+  spherical.radius += (sphericalTarget.radius - spherical.radius) * DAMPING;
+  spherical.makeSafe();
+    
+  const pos = new THREE.Vector3().setFromSpherical(spherical).add(camTarget);
+  camera.position.copy(pos);
+  camera.lookAt(camTarget);
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(
+    Object.values(nodes).map(o => o.mesh)
+  );
+
+  if (intersects.length > 0) {
+    const data = intersects[0].object.userData;
+    tooltip.style.display = "block";
+    tooltip.style.left = mouse.x * 100 + 50 + "%";
+    tooltip.style.top = mouse.y * 100 + 50 + "%";
+    tooltip.innerHTML = `
+SSID: ${data.ssid}<br>
+BSSID: ${data.id}<br>
+Signal: ${data.signal}%<br>
+Channel: ${data.channel}<br>
+Band: ${data.band} MHz<br>
+Security: ${data.security}<br>
+Cipher: ${data.cipher}
+`;
+  } else {
+    tooltip.style.display = "none";
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+
+</body>
+</html>
